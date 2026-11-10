@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b3a82"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.png">
+<title>مشروع مياه المفاليس</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--b:#0b3a82;--g:#f2c230;--w:#1d8fe0;--l:#4a9a2a;--bg:#f2f7fc;--r:#c0392b}
+*{box-sizing:border-box}body{margin:0;font:16px Tahoma,"Noto Naskh Arabic",sans-serif;background:var(--bg);color:#12233d;padding-bottom:64px}
+header{background:var(--b);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:4px solid var(--g)}
+header img{height:40px;background:#fff;border-radius:6px}header b{font-size:18px}
+main{padding:12px;max-width:720px;margin:auto}
+nav{position:fixed;bottom:0;right:0;left:0;display:flex;background:#fff;border-top:2px solid var(--b)}
+nav button{flex:1;border:0;background:none;padding:12px 2px;font:inherit;font-size:11px;color:var(--b)}nav .on{background:var(--b);color:#fff}
+section{background:#fff;border-radius:10px;padding:12px;margin-bottom:12px;border:1px solid #cfdcec}
+h3{margin:0 0 8px;color:var(--b)}input,select,button.p{width:100%;padding:10px;margin:4px 0;font:inherit;border:1px solid #9db4d1;border-radius:8px;background:#fff}
+button.p{background:var(--b);color:#fff;border:0}button.s{background:var(--l)}button.d{background:var(--r)}
+.row{display:flex;gap:8px}.row>*{flex:1}.it{padding:8px 0;border-bottom:1px solid #e3ebf5;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.k{font-size:20px;font-weight:bold;color:var(--b)}.warn{background:#fff3cd;border:1px solid var(--g);padding:8px;border-radius:8px}.m{color:#5b6f8a;font-size:13px}
+#pr{display:none}.inv{border:2px solid #000;padding:6px;margin-bottom:10px;height:6.4cm;page-break-inside:avoid;font-size:12px}
+.inv table{width:100%;border-collapse:collapse;margin:4px 0}.inv th,.inv td{border:1px solid #000;padding:3px;text-align:center;background:#f3d6d6}.inv td{background:#fff;height:26px}
+.inv .h{display:flex;justify-content:space-between;align-items:center}.ti{border:2px solid #c0392b;border-radius:8px;padding:4px 10px;text-align:center;font-weight:bold}
+.st th,.st td{border:1px solid #000;padding:3px;font-size:12px}
+@media print{body>*:not(#pr){display:none!important}#pr{display:block}body{padding:0;background:#fff}}
+</style></head><body>
+<header><img src="logo.png" alt=""><b>مشروع مياه المفاليس</b></header>
+<main id="v"></main><div id="pr"></div>
+<nav id="nv"></nav>
+<script>
+const $=s=>document.querySelector(s),e=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const def={villages:['التبيته','مويطمان','الهجمه','الضباب','الدخل','الحوادرة','الكريحة','الشجيفه'],subs:[],inv:[],pay:[],exp:[],log:[],set:{price:0,pin:'',last:0,rc:0,iid:0,user:'المحاسب'}};
+let D,idb,tab='h';const N=x=>(+x||0).toLocaleString('en');const mon=()=>new Date().toISOString().slice(0,7);
+const open=()=>new Promise(r=>{const q=indexedDB.open('mf',1);q.onupgradeneeded=()=>q.result.createObjectStore('k');q.onsuccess=()=>{idb=q.result;const g=idb.transaction('k').objectStore('k').get('d');g.onsuccess=()=>{D=g.result||structuredClone(def);fix();r()}}});
+const save=()=>idb.transaction('k','readwrite').objectStore('k').put(D,'d');
+const lg=(a,d)=>{D.log.push({t:Date.now(),u:D.set.user,a,d});save()};
+const sh=async t=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)))].join('');
+const chg=s=>(sub(s)?.open||0)+D.inv.filter(i=>i.sub==s).reduce((a,i)=>a+i.value+i.waste+i.fine,0);
+const paid=s=>D.pay.filter(p=>p.sub==s&&!p.void).reduce((a,p)=>a+p.amt,0);
+const bal=s=>chg(s)-paid(s);const sub=n=>D.subs.find(x=>x.no==n);
+const dl=(n,t,m='text/plain')=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click()};
+function lastRead(s,m){const l=D.inv.filter(i=>i.sub==s&&i.month<m).sort((a,b)=>b.month.localeCompare(a.month))[0];return l?l.cur:(sub(s)?.r0||0)}
+function mk(s,cur,m){const prev=lastRead(s.no,m);if(D.inv.some(i=>i.sub==s.no&&i.month==m))return 'مكرر';
+ if(cur<prev&&!confirm(s.name+': القراءة الحالية أقل من السابقة. متابعة؟'))return 'ملغي';
+ const u=Math.max(0,cur-prev),lu=D.inv.filter(i=>i.sub==s.no).slice(-1)[0];
+ if(lu&&lu.units>0&&u>lu.units*3&&!confirm(s.name+': استهلاك غير معتاد ('+u+' وحدة). متابعة؟'))return 'ملغي';
+ const v=u*D.set.price;D.inv.push({id:++D.set.iid,sub:s.no,month:m,prev,cur,units:u,value:v,waste:0,fine:0,arrears:bal(s.no),total:v+bal(s.no)});lg('فاتورة',s.no+' '+m);return 'ok'}
+function pay(s,amt,meth,col,date){const d=D.pay.find(p=>p.sub==s&&p.amt==amt&&p.date==date&&!p.void);
+ if(d&&!confirm('توجد دفعة مشابهة (نفس المشترك والمبلغ والتاريخ). تسجيل أخرى؟'))return;
+ const p={rc:++D.set.rc,sub:s,amt,meth,col,date,u:D.set.user};D.pay.push(p);lg('قبض','إيصال '+p.rc);return p}
+const tabs={h:'الرئيسية',s:'المشتركون',i:'القراءات',p:'القبض',x:'المصروفات',w:'العمال',k:'الكشف',b:'النسخ'};
+function nav(){$('#nv').innerHTML=Object.entries(tabs).map(([k,v])=>`<button class="${k==tab?'on':''}" onclick="tab='${k}';draw()">${v}</button>`).join('')}
+const vo=(sel)=>D.villages.map(v=>`<option ${v==sel?'selected':''}>${v}</option>`).join('');
+const R={
+h(){const t=D.inv.reduce((a,i)=>a+i.value+i.waste+i.fine,0),c=D.pay.filter(p=>!p.void).reduce((a,p)=>a+p.amt,0),days=D.set.last?Math.floor((Date.now()-D.set.last)/864e5):null;
+ return `${days===null||days>7?`<div class=warn>⚠ ${days===null?'لم تُنشأ نسخة احتياطية بعد':'آخر نسخة قبل '+days+' يوم'}. اذهب إلى «النسخ».</div><br>`:''}
+ <section><h3>الملخص</h3><div class=row><div>الفواتير<div class=k>${N(t)}</div></div><div>المحصّل<div class=k>${N(c)}</div></div><div>المتبقي<div class=k>${N(Object.values(balMap()).reduce((a,b)=>a+b,0))}</div></div></div><div class=m>بالريال اليمني — المشتركون: ${D.subs.length}</div></section>
+ <section><h3>الإعدادات</h3>سعر الوحدة (ريال)<input id=pr2 type=number value="${D.set.price}"><button class=p onclick="D.set.price=+$('#pr2').value;lg('سعر',D.set.price);alert('تم')">حفظ السعر</button>
+ رمز PIN لفتح التطبيق<input id=pin type=password inputmode=numeric placeholder="اتركه فارغًا لإلغاء القفل"><button class=p onclick="setPin()">حفظ الرمز</button></section>`},
+s(){const q=($('#q')||{}).value||'';const l=D.subs.filter(x=>[x.no,x.name,x.phone,x.village].join(' ').includes(q)).slice(0,60);
+ return `<section><h3>إضافة مشترك</h3><input id=n1 placeholder="رقم الاشتراك"><input id=n2 placeholder="الاسم"><input id=n3 placeholder="الهاتف" inputmode=tel><select id=n4>${vo()}</select><input id=n5 placeholder="رقم العداد (اتركه فارغًا إن لم يوجد)"><button class=p onclick="addSub()">حفظ</button></section>
+ <section><h3>استيراد مشتركين من Excel</h3><div class=m>الأعمدة: رقم الاشتراك، الاسم، الهاتف، القرية، رقم العداد، الحالة، الرصيد السابق، آخر قراءة. المشتركون المكررون يُتجاهلون.</div><input type=file accept=.xlsx,.xls onchange="impSubs(this.files[0])"></section>
+ <section><input id=q placeholder="بحث بالاسم أو الرقم أو الهاتف أو القرية" value="${e(q)}" oninput="draw(1)">${l.map(x=>`<div class=it><div><b>${e(x.name)}</b> <span class=m>#${e(x.no)} · عداد ${e(x.meter||'—')}</span><br><span class=m>الرصيد: ${N(bal(x.no))}</span></div><div><select onchange="mv('${e(x.no)}','village',this.value)">${vo(x.village)}</select><select onchange="mv('${e(x.no)}','status',this.value)">${['فعّال','موقوف','متعثر','ملغي'].map(z=>`<option ${z==x.status?'selected':''}>${z}</option>`).join('')}</select></div></div>`).join('')||'<div class=m>لا يوجد مشتركون</div>'}</section>`},
+i(){const m=window.mm||mon(),vf=window.vf||'';const l=D.subs.filter(x=>x.status=='فعّال'&&(!vf||x.village==vf)).slice(0,150);
+ return `<section><div class=row><input id=mm type=month value="${m}" onchange="mm=this.value;draw()"><select id=vf onchange="vf=this.value;draw()"><option value="">كل القرى</option>${vo(vf)}</select></div><div class=m>سعر الوحدة: ${N(D.set.price)} ريال ${D.set.price?'':'⚠ حدده من الرئيسية'}</div>
+ ${l.map(x=>{const iv=D.inv.find(i=>i.sub==x.no&&i.month==m);return `<div class=it><div>${e(x.name)}<br><span class=m>#${e(x.no)} · السابقة ${lastRead(x.no,m)}</span></div>${iv?`<b>${iv.cur} → ${N(iv.total)}</b>`:`<input class=rd data-s="${e(x.no)}" type=number style="width:110px" placeholder="الحالية">`}</div>`}).join('')}
+ <button class=p onclick="bulk()">إصدار الفواتير</button><button class="p s" onclick="prt()">طباعة فواتير الشهر</button></section>`},
+p(){return `<section><h3>تسجيل دفعة</h3><input id=ps list=dl placeholder="رقم الاشتراك"><datalist id=dl>${D.subs.map(x=>`<option value="${e(x.no)}">${e(x.name)}</option>`).join('')}</datalist><input id=pa type=number placeholder="المبلغ"><input id=pm value="نقدًا"><input id=pc placeholder="اسم المحصل"><input id=pd type=date value="${new Date().toISOString().slice(0,10)}"><button class=p onclick="doPay()">حفظ وإصدار إيصال</button></section>
+ <section><h3>آخر الإيصالات</h3>${D.pay.slice(-25).reverse().map(p=>`<div class=it><div class="${p.void?'m':''}">#${p.rc} ${e(sub(p.sub)?.name)} — ${N(p.amt)} ${p.void?'(ملغي)':''}<br><span class=m>${p.date} · ${e(p.col)}</span></div>${p.void?'':`<button class="p d" style="width:auto" onclick="vd(${p.rc})">إلغاء</button>`}</div>`).join('')}</section>`},
+x(){return `<section><h3>مصروف / إيراد آخر</h3><select id=xt><option>مصروف</option><option>إيراد</option></select><select id=xc>${['وقود','كهرباء','صيانة','رواتب','قطع غيار','نقل','رسوم إدارية','أخرى'].map(c=>`<option>${c}</option>`).join('')}</select><input id=xa type=number placeholder="المبلغ"><input id=xp placeholder="الجهة / المستفيد"><input id=xd placeholder="الوصف"><button class=p onclick="addX()">حفظ</button></section>
+ <section>${D.exp.slice(-25).reverse().map(x=>`<div class=it><div>${x.t} · ${e(x.c)} — ${e(x.d)}<br><span class=m>${x.date}</span></div><b>${N(x.a)}</b></div>`).join('')}<div class=m>الصافي: ${N(D.exp.reduce((a,x)=>a+(x.t=='إيراد'?x.a:-x.a),0)+D.pay.filter(p=>!p.void).reduce((a,p)=>a+p.amt,0))}</div></section>`},
+w(){const T=['صرف','سلفة','خصم','مكافأة','راتب'];return `<section><h3>إضافة عامل</h3><input id=w1 placeholder="الاسم"><input id=w2 placeholder="الوظيفة"><input id=w3 type=number placeholder="الراتب الشهري (ريال)"><button class=p onclick="addW()">حفظ العامل</button><button class="p s" onclick="wsal()">استحقاق رواتب هذا الشهر للجميع</button></section>
+ <section><h3>حركة على حساب عامل</h3><select id=wx>${D.wk.map(w=>`<option value="${w.id}">${e(w.name)}</option>`).join('')}</select><select id=wy>${T.map(z=>`<option>${z}</option>`).join('')}</select><input id=wa type=number placeholder="المبلغ"><input id=wn placeholder="ملاحظة"><input id=wd type=date value="${new Date().toISOString().slice(0,10)}"><button class=p onclick="wtx()">حفظ</button><div class=m>صرف وسلفة = مبلغ دُفع للعامل (يدخل كشف الصندوق). راتب ومكافأة = مستحق له. خصم = يُنقص المستحق. التصحيح يكون بحركة معاكسة.</div></section>
+ <section><h3>الحسابات</h3>${D.wk.map(w=>{const b=wbl(w.id);return `<div class=it><div><b>${e(w.name)}</b> <span class=m>${e(w.job)} · راتب ${N(w.salary)}</span><br>${b>=0?'المستحق له':'عليه'}: <b>${N(Math.abs(b))}</b></div><button class="p s" style="width:auto" onclick="wprint(${w.id})">كشف</button></div>`}).join('')||'<div class=m>لا يوجد عمال</div>'}</section>`},
+k(){const[f,t]=rng(),S=stmt(f,t),row=(a,b)=>`<div class=it><span>${a}</span><b>${N(b)}</b></div>`;
+ return `<section><h3>كشف الحساب الشامل</h3><div class=row><input type=date value="${f}" onchange="kf=this.value;draw()"><input type=date value="${t}" onchange="kt=this.value;draw()"></div>
+ ${row('رصيد الصندوق في بداية الفترة',S.open)}${row('المحصّل من المشتركين',S.p)}${row('إيرادات أخرى',S.o)}${row('المصروفات',S.e)}${row('مدفوعات العمال (صرف وسلف)',S.w)}${row('الصافي',S.p+S.o-S.e-S.w)}${row('رصيد الصندوق في نهاية الفترة',S.open+S.p+S.o-S.e-S.w)}${row('فواتير الاستهلاك الصادرة في الفترة',S.bill)}${row('إجمالي المتبقي على المشتركين (حتى اليوم)',S.debt)}
+ <button class=p onclick="kprint()">طباعة الكشف</button><button class="p s" onclick="kxl()">تصدير Excel</button></section>
+ <section><h3>المتبقي حسب القرية</h3>${S.vil.map(v=>row(e(v[0])+' ('+v[1]+' مشترك)',v[2])).join('')}</section>
+ <section><h3>الحركة</h3>${S.rows.slice(-150).reverse().map(r=>`<div class=it><div>${e(r[1])}<br><span class=m>${r[0]} · ${e(r[2])}</span></div><b style="color:${r[3]?'#1a7f37':'#c0392b'}">${r[3]?'+'+N(r[3]):'−'+N(r[4])}</b></div>`).join('')||'<div class=m>لا حركة في الفترة</div>'}</section>`},
+b(){return `<section><h3>النسخ الاحتياطي</h3><div class=m>آخر نسخة: ${D.set.last?new Date(D.set.last).toLocaleString('ar'):'لا يوجد'}</div><button class=p onclick="bk()">نسخ احتياطي الآن (مشفّر)</button><button class="p s" onclick="csv()">تصدير المشتركين والقبض (CSV)</button>
+ <h3 style="margin-top:14px">استعادة</h3><input type=file id=rf accept=.mfbak onchange="rs(this.files[0])">
+ <h3 style="margin-top:14px">استيراد من Excel</h3><div class=m>الأعمدة: رقم الاشتراك، القراءة، المبلغ، المحصل، التاريخ</div><input type=file id=xf accept=.xlsx,.xls onchange="imp(this.files[0])"></section>`}};
+function draw(k){const f=document.activeElement;const id=f&&f.id,pos=f&&f.selectionStart;nav();$('#v').innerHTML=R[tab]();if(k&&id){const n=$('#'+id);if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(_){}}}}
+function addSub(){const no=$('#n1').value.trim(),n=$('#n2').value.trim();if(!no||!n)return alert('أدخل رقم الاشتراك والاسم');if(sub(no))return alert('رقم الاشتراك مستخدم');
+ D.subs.push({no,name:n,phone:$('#n3').value,village:$('#n4').value,meter:$('#n5').value,status:'فعّال'});lg('مشترك',no);draw()}
+function mv(no,f,v){const x=sub(no);lg('تعديل '+f,no+': '+x[f]+' ← '+v);x[f]=v;save();draw(1)}
+function bulk(){const m=$('#mm').value;let c=0;document.querySelectorAll('.rd').forEach(i=>{if(i.value!==''&&mk(sub(i.dataset.s),+i.value,m)=='ok')c++});save();alert('أُصدرت '+c+' فاتورة');draw()}
+function doPay(){const s=$('#ps').value.trim(),a=+$('#pa').value;if(!sub(s)||a<=0)return alert('تحقق من رقم المشترك والمبلغ');const p=pay(s,a,$('#pm').value,$('#pc').value,$('#pd').value);if(p){alert('إيصال رقم '+p.rc);draw()}}
+function vd(rc){const r=prompt('سبب الإلغاء؟');if(!r)return;const p=D.pay.find(x=>x.rc==rc);p.void=r;lg('إلغاء إيصال',rc+' — '+r);draw()}
+function addX(){const a=+$('#xa').value;if(a<=0)return;D.exp.push({t:$('#xt').value,c:$('#xc').value,a,p:$('#xp').value,d:$('#xd').value,date:new Date().toISOString().slice(0,10)});lg('حركة مالية',a);draw()}
+async function setPin(){const v=$('#pin').value;D.set.pin=v?await sh(v):'';lg('PIN','تغيير');alert('تم')}
+function prt(){const m=window.mm||mon();const l=D.inv.filter(i=>i.month==m);if(!l.length)return alert('لا توجد فواتير');
+ $('#pr').innerHTML=l.map(i=>{const s=sub(i.sub)||{},pd=D.pay.filter(p=>p.sub==i.sub&&!p.void&&p.date.slice(0,7)==m).reduce((a,p)=>a+p.amt,0);
+ return `<div class=inv><div class=h><b>مشروع مياه المفاليس</b></div><div class=h><div>اسم المشترك: ${e(s.name)}<br>رقم المشترك: ${e(i.sub)}</div><div class=ti>فاتورة استهلاك المياه<br>لشهر ${+m.slice(5)} / ${m.slice(0,4)}م</div><div>رقم العداد: ${e(s.meter)}<br>رقم الفاتورة: ${i.id}</div></div>
+ <table><tr><th>السابقة<th>الحالية<th>الوحدات<th>القيمة (ريال)<th>متخلفات المشروع الحالي<th>رسوم مخالفة<th>الإجمالي<th>المسدد<th>متأخرات سابقة<tr><td>${i.prev}<td>${i.cur}<td>${i.units}<td>${N(i.value)}<td>${N(i.waste)}<td>${N(i.fine)}<td>${N(i.total)}<td>${N(pd)}<td>${N(i.arrears)}</table>
+ <b style="color:#c00">تنبيه: آخر موعد لتسديد قيمة استهلاك الماء نهاية الشهر وإلا سيتم فصل الخدمة عن خطكم</b><br><b>الإدارة</b></div>`}).join('');print()}
+async function key(p,s){const m=await crypto.subtle.importKey('raw',new TextEncoder().encode(p),'PBKDF2',0,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:s,iterations:200000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},0,['encrypt','decrypt'])}
+async function bk(auto){const p=auto||prompt('كلمة مرور النسخة (احفظها جيدًا، لا يمكن استعادتها):');if(!p)return;D.set.last=Date.now();save();
+ const s=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),c=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await key(p,s),new TextEncoder().encode(JSON.stringify(D))));
+ dl('mafalis-'+new Date().toISOString().slice(0,10)+'.mfbak',JSON.stringify({ts:Date.now(),s:[...s],i:[...iv],c:[...c]}));draw()}
+async function rs(f){if(!f)return;const t=await f.text(),o=JSON.parse(t);if(!confirm('نسخة بتاريخ '+new Date(o.ts).toLocaleString('ar')+' — الحجم '+Math.round(f.size/1024)+' ك.ب\nسيتم أولًا حفظ نسخة من البيانات الحالية، ثم الاستبدال. متابعة؟'))return;
+ const p=prompt('كلمة مرور النسخة:');if(!p)return;let d;try{d=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(o.i)},await key(p,new Uint8Array(o.s)),new Uint8Array(o.c))))}catch(_){return alert('كلمة المرور خاطئة أو الملف تالف')}
+ await bk(p);D=d;fix();save();alert('تمت الاستعادة');draw()}
+function csv(){const q=a=>a.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',');
+ dl('subscribers.csv','\ufeff'+[q(['الرقم','الاسم','الهاتف','القرية','العداد','الحالة','الرصيد']),...D.subs.map(x=>q([x.no,x.name,x.phone,x.village,x.meter,x.status,bal(x.no)]))].join('\n'),'text/csv');
+ dl('payments.csv','\ufeff'+[q(['إيصال','مشترك','مبلغ','تاريخ','محصل']),...D.pay.filter(p=>!p.void).map(p=>q([p.rc,p.sub,p.amt,p.date,p.col]))].join('\n'),'text/csv')}
+async function imp(f){if(!f)return;if(!window.XLSX)return alert('مكتبة Excel غير محمّلة. افتح التطبيق مرة واحدة مع الإنترنت.');
+ const m=prompt('شهر القراءات (YYYY-MM)',mon());if(!m)return;const rows=XLSX.utils.sheet_to_json(XLSX.read(await f.arrayBuffer()).Sheets[XLSX.read(await f.arrayBuffer()).SheetNames[0]]);let r=0,p=0,bad=0;
+ for(const x of rows){const s=sub(String(x['رقم الاشتراك']).trim());if(!s){bad++;continue}
+  if(x['القراءة']!==undefined&&x['القراءة']!==''&&mk(s,+x['القراءة'],m)=='ok')r++;
+  if(+x['المبلغ']>0&&pay(s.no,+x['المبلغ'],'نقدًا',x['المحصل']||'',String(x['التاريخ']||new Date().toISOString().slice(0,10)).slice(0,10)))p++}
+ save();alert(`قراءات: ${r}، دفعات: ${p}، مشتركون غير موجودين: ${bad}`);draw()}
+const fix=()=>{D.wk=D.wk||[];D.wt=D.wt||[]};
+const balMap=()=>{const m={};D.subs.forEach(s=>m[s.no]=s.open||0);D.inv.forEach(i=>m[i.sub]=(m[i.sub]||0)+i.value+i.waste+i.fine);D.pay.forEach(p=>{if(!p.void)m[p.sub]=(m[p.sub]||0)-p.amt});return m};
+const wbl=id=>D.wt.filter(x=>x.w==id).reduce((a,x)=>a+(['راتب','مكافأة'].includes(x.type)?x.amt:-x.amt),0);
+const rng=()=>[window.kf||mon()+'-01',window.kt||new Date().toISOString().slice(0,10)];
+function ptab(t,h,r,top=''){$('#pr').innerHTML=`<div class=st><h2 style="text-align:center">مشروع مياه المفاليس</h2><h3 style="text-align:center">${t}</h3>${top}<table style="width:100%;border-collapse:collapse"><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${r.map(x=>`<tr>${x.map(y=>`<td>${e(typeof y=='number'?N(y):y)}</td>`).join('')}</tr>`).join('')}</table></div>`;print()}
+function xl(n,sh){if(!window.XLSX)return alert('مكتبة Excel غير محمّلة. افتح التطبيق مرة واحدة مع الإنترنت.');const wb=XLSX.utils.book_new();wb.Workbook={Views:[{RTL:true}]};sh.forEach(z=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(z[1]),z[0]));XLSX.writeFile(wb,n)}
+function stmt(f,t){const all=[],ok=d=>d<=t;
+ D.pay.forEach(p=>{if(!p.void&&ok(p.date))all.push([p.date,'قبض اشتراك','إيصال '+p.rc+' — '+(sub(p.sub)?.name||p.sub),p.amt,0,'p'])});
+ D.exp.forEach(x=>{if(ok(x.date))all.push([x.date,x.t=='إيراد'?'إيراد آخر':'مصروف — '+x.c,[x.p,x.d].filter(Boolean).join(' — '),x.t=='إيراد'?x.a:0,x.t=='إيراد'?0:x.a,x.t=='إيراد'?'o':'e'])});
+ D.wt.forEach(x=>{if(['صرف','سلفة'].includes(x.type)&&ok(x.date))all.push([x.date,'عمال — '+x.type,((D.wk.find(w=>w.id==x.w)||{}).name||'')+' '+(x.note||''),0,x.amt,'w'])});
+ all.sort((a,b)=>a[0].localeCompare(b[0]));const S={open:0,p:0,o:0,e:0,w:0,rows:[]};
+ all.forEach(r=>{if(r[0]<f)S.open+=r[3]-r[4];else{S[r[5]]+=r[3]+r[4];S.rows.push(r)}});
+ const m=balMap(),v={};D.subs.forEach(s=>{const z=v[s.village]=v[s.village]||[s.village,0,0];z[1]++;z[2]+=m[s.no]||0});
+ S.vil=Object.values(v);S.debt=S.vil.reduce((a,z)=>a+z[2],0);
+ S.bill=D.inv.filter(i=>i.month>=f.slice(0,7)&&i.month<=t.slice(0,7)).reduce((a,i)=>a+i.value+i.waste+i.fine,0);return S}
+function kprint(){const[f,t]=rng(),S=stmt(f,t);let b=S.open;
+ ptab('كشف حساب شامل من '+f+' إلى '+t,['التاريخ','النوع','البيان','داخل','خارج','الرصيد'],S.rows.map(r=>[r[0],r[1],r[2],r[3],r[4],b+=r[3]-r[4]]),`<p>رصيد البداية: ${N(S.open)} — المحصّل من المشتركين: ${N(S.p)} — إيرادات أخرى: ${N(S.o)} — المصروفات: ${N(S.e)} — مدفوعات العمال: ${N(S.w)} — الرصيد الختامي: ${N(S.open+S.p+S.o-S.e-S.w)}</p><p>فواتير صادرة: ${N(S.bill)} — المتبقي على المشتركين: ${N(S.debt)}</p>`)}
+function kxl(){const[f,t]=rng(),S=stmt(f,t);let b=S.open;
+ xl('kashf-'+f+'_'+t+'.xlsx',[['الملخص',[['البند','المبلغ'],['رصيد البداية',S.open],['المحصل من المشتركين',S.p],['إيرادات أخرى',S.o],['المصروفات',S.e],['مدفوعات العمال',S.w],['الرصيد الختامي',S.open+S.p+S.o-S.e-S.w],['فواتير صادرة',S.bill],['المتبقي على المشتركين',S.debt]]],['الحركة',[['التاريخ','النوع','البيان','داخل','خارج','الرصيد'],...S.rows.map(r=>[r[0],r[1],r[2],r[3],r[4],b+=r[3]-r[4]])]],['القرى',[['القرية','عدد المشتركين','المتبقي'],...S.vil]]])}
+function addW(){const n=$('#w1').value.trim();if(!n)return alert('أدخل الاسم');D.wk.push({id:Date.now(),name:n,job:$('#w2').value,salary:+$('#w3').value||0});lg('عامل',n);draw()}
+function wtx(){const a=+$('#wa').value,w=+$('#wx').value;if(!w||a<=0)return alert('اختر العامل وأدخل المبلغ');D.wt.push({w,type:$('#wy').value,amt:a,note:$('#wn').value,date:$('#wd').value,u:D.set.user});lg('حركة عامل',w+' '+$('#wy').value+' '+a);draw()}
+function wsal(){const m=mon();if(!confirm('إضافة راتب شهر '+m+' لكل عامل لم يُستحق له بعد؟'))return;let c=0;D.wk.forEach(w=>{if(w.salary>0&&!D.wt.some(x=>x.w==w.id&&x.type=='راتب'&&x.m==m)){D.wt.push({w:w.id,type:'راتب',amt:w.salary,note:'راتب '+m,m,date:new Date().toISOString().slice(0,10),u:D.set.user});c++}});lg('رواتب',m+' '+c);alert('أُضيف '+c);draw()}
+function wprint(id){const w=D.wk.find(x=>x.id==id);let b=0;ptab('كشف حساب العامل: '+w.name,['التاريخ','النوع','ملاحظة','المبلغ','الرصيد المستحق'],D.wt.filter(x=>x.w==id).sort((a,c)=>a.date.localeCompare(c.date)).map(x=>[x.date,x.type,x.note||'',x.amt,b+=(['راتب','مكافأة'].includes(x.type)?x.amt:-x.amt)]),'<p>الوظيفة: '+e(w.job)+'</p>')}
+async function impSubs(f){if(!f)return;if(!window.XLSX)return alert('مكتبة Excel غير محمّلة. افتح التطبيق مرة واحدة مع الإنترنت.');
+ const wb=XLSX.read(await f.arrayBuffer()),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);if(!confirm('سيتم استيراد '+rows.length+' صف. متابعة؟'))return;
+ const have=new Set(D.subs.map(x=>x.no));let a=0,d=0,bad=0;
+ for(const x of rows){const no=String(x['رقم الاشتراك']??'').trim(),n=String(x['الاسم']??'').trim();if(!no||!n){bad++;continue}if(have.has(no)){d++;continue}
+  const v=String(x['القرية']||'').trim()||'غير محدد';if(!D.villages.includes(v))D.villages.push(v);
+  D.subs.push({no,name:n,phone:String(x['الهاتف']??''),village:v,meter:String(x['رقم العداد']??''),status:['فعّال','موقوف','متعثر','ملغي'].includes(x['الحالة'])?x['الحالة']:'فعّال',open:+x['الرصيد السابق']||0,r0:+x['آخر قراءة']||0});have.add(no);a++}
+ lg('استيراد مشتركين',a+' مشترك');alert(`أُضيف ${a}، مكرر ${d}، ناقص ${bad}`);draw()}
+async function lock(){if(!D.set.pin)return;for(;;){const v=prompt('أدخل رمز PIN');if(v&&await sh(v)==D.set.pin)return}}
+open().then(async()=>{await lock();navigator.storage?.persist?.();if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');draw()});
+</script></body></html>
